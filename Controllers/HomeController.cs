@@ -1,5 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
-using PainForGlory_LoginServer.Models;
+using PainForGlory_LoginServer.Models.ViewModels;
 using System.Diagnostics;
 
 namespace PainForGlory_LoginServer.Controllers

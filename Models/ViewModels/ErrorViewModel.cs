@@ -1,4 +1,4 @@
-namespace PainForGlory_LoginServer.Models
+namespace PainForGlory_LoginServer.Models.ViewModels
 {
     public class ErrorViewModel
     {
