@@ -1,82 +1,101 @@
-﻿using Microsoft.AspNetCore.Mvc;
-using PainForGlory_LoginServer.Data;
+﻿using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Mvc;
 using PainForGlory_LoginServer.Models;
-using PainForGlory_LoginServer.Helpers;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.AspNetCore.Authentication.Cookies;
-using Microsoft.AspNetCore.Authentication;
-using System.Security.Claims;
 using PainForGlory_LoginServer.Models.ViewModels;
+using System.Threading.Tasks;
 
 namespace PainForGlory_LoginServer.Controllers
 {
     public class AccountController : Controller
     {
-        private readonly AuthDbContext _context;
+        private readonly UserManager<UserAccount> _userManager;
+        private readonly SignInManager<UserAccount> _signInManager;
 
-        public AccountController(AuthDbContext context)
+        public AccountController(UserManager<UserAccount> userManager, SignInManager<UserAccount> signInManager)
         {
-            _context = context;
+            _userManager = userManager;
+            _signInManager = signInManager;
         }
 
-        public IActionResult Register() => View();
+        // GET: /Account/Register
+        [HttpGet]
+        public IActionResult Register()
+        {
+            return View();
+        }
 
+        // POST: /Account/Register
         [HttpPost]
+        [ValidateAntiForgeryToken]
         public async Task<IActionResult> Register(UserAccount model)
         {
             if (!ModelState.IsValid)
                 return View(model);
 
-            if (_context.UserAccounts.Any(u => u.Username == model.Username))
+            var user = new UserAccount
             {
-                ModelState.AddModelError("Username", "Username already taken");
-                return View(model);
+                UserName = model.Username,
+                Email = model.Email,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            var result = await _userManager.CreateAsync(user, model.PasswordHash); // PasswordHash is used as the plain password here
+
+            if (result.Succeeded)
+            {
+                await _signInManager.SignInAsync(user, isPersistent: false);
+                return RedirectToAction("Index", "Home");
             }
 
-            model.PasswordHash = PasswordHelper.HashPassword(model.PasswordHash);
-            model.CreatedAt = DateTime.UtcNow;
+            foreach (var error in result.Errors)
+            {
+                ModelState.AddModelError(string.Empty, error.Description);
+            }
 
-            _context.UserAccounts.Add(model);
-            await _context.SaveChangesAsync();
-
-            return RedirectToAction("Login");
+            return View(model);
         }
 
-        public IActionResult Login() => View(new LoginViewModel());
+        // GET: /Account/Login
+        [HttpGet]
+        public IActionResult Login()
+        {
+            return View(new LoginViewModel());
+        }
 
+        // POST: /Account/Login
         [HttpPost]
+        [ValidateAntiForgeryToken]
         public async Task<IActionResult> Login(LoginViewModel model)
         {
             if (!ModelState.IsValid)
                 return View(model);
 
-            var user = await _context.UserAccounts.FirstOrDefaultAsync(u => u.Username == model.Username);
-            if (user == null || !PasswordHelper.VerifyPassword(model.Password, user.PasswordHash))
+            var result = await _signInManager.PasswordSignInAsync(model.Username, model.Password, model.RememberMe, lockoutOnFailure: false);
+
+            if (result.Succeeded)
             {
-                model.ErrorMessage = "Invalid username or password.";
-                return View(model);
+                return RedirectToAction("Index", "Home");
             }
 
-            var claims = new List<Claim>
+            if (result.IsLockedOut)
             {
-                new Claim(ClaimTypes.Name, user.Username),
-                new Claim(ClaimTypes.NameIdentifier, user.Id.ToString())
-            };
+                ModelState.AddModelError(string.Empty, "Your account is locked out.");
+            }
+            else
+            {
+                ModelState.AddModelError(string.Empty, "Invalid login attempt.");
+            }
 
-            var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
-            var principal = new ClaimsPrincipal(identity);
-
-            await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal);
-
-            return RedirectToAction("Index", "Home");
+            return View(model);
         }
 
+        // POST: /Account/Logout
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Logout()
         {
-            await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-            return RedirectToAction("Login");
+            await _signInManager.SignOutAsync();
+            return RedirectToAction("Index", "Home");
         }
     }
 }

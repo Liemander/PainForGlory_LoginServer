@@ -13,5 +13,6 @@ namespace PainForGlory_LoginServer.Models.ViewModels
         public string Password { get; set; } = string.Empty;
 
         public string? ErrorMessage { get; set; }
+        public bool RememberMe { get; internal set; } = false;
     }
 }

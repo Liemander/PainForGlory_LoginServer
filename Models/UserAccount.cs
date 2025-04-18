@@ -1,11 +1,21 @@
-﻿namespace PainForGlory_LoginServer.Models
+﻿using System;
+using Microsoft.AspNetCore.Identity;
+
+namespace PainForGlory_LoginServer.Models
 {
-    public class UserAccount
+    // Inherit IdentityUser<Guid> so IDs are UUIDs
+    public class UserAccount : IdentityUser<Guid>
     {
-        public int Id { get; set; }
-        public string Username { get; set; } = "";
-        public string Email { get; set; } = "";
-        public string PasswordHash { get; set; } = "";
+        // ---- ALIASES to keep old controllers compiling ---------------
+        // Your old MVC code calls "Username"; Identity calls it "UserName".
+        public string Username
+        {
+            get => UserName;
+            set => UserName = value;
+        }
+        // --------------------------------------------------------------
+
+        // Extra domain‑specific fields are fine here
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     }
 }
