@@ -1,101 +1,96 @@
-﻿using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.IdentityModel.Tokens;
 using PainForGlory_LoginServer.Models;
 using PainForGlory_LoginServer.Models.ViewModels;
-using System.Threading.Tasks;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using System.Text;
+using System.Security.Cryptography;
 
 namespace PainForGlory_LoginServer.Controllers
 {
-    public class AccountController : Controller
+    [ApiController]
+    [Route("api/[controller]")]
+    public class AccountController : ControllerBase
     {
         private readonly UserManager<UserAccount> _userManager;
-        private readonly SignInManager<UserAccount> _signInManager;
+        private readonly IConfiguration _config;
 
-        public AccountController(UserManager<UserAccount> userManager, SignInManager<UserAccount> signInManager)
+        public AccountController(UserManager<UserAccount> userManager, IConfiguration config)
         {
             _userManager = userManager;
-            _signInManager = signInManager;
+            _config = config;
         }
 
-        // GET: /Account/Register
-        [HttpGet]
-        public IActionResult Register()
+        [HttpPost("login")]
+        public async Task<IActionResult> Login([FromBody] LoginViewModel model)
         {
-            return View();
-        }
+            var user = await _userManager.FindByNameAsync(model.Username);
+            if (user == null || !await _userManager.CheckPasswordAsync(user, model.Password))
+                return Unauthorized();
 
-        // POST: /Account/Register
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Register(UserAccount model)
-        {
-            if (!ModelState.IsValid)
-                return View(model);
+            // 🔁 Create refresh token
+            var refreshToken = GenerateRefreshToken();
+            user.RefreshToken = refreshToken;
+            user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(7);
 
-            var user = new UserAccount
+            await _userManager.UpdateAsync(user);
+
+            // 🔐 Create JWT access token
+            var accessToken = GenerateAccessToken(user);
+
+            return Ok(new
             {
-                UserName = model.Username,
-                Email = model.Email,
-                CreatedAt = DateTime.UtcNow
+                accessToken,
+                refreshToken
+            });
+        }
+
+        [HttpPost("refresh-token")]
+        public async Task<IActionResult> Refresh([FromBody] RefreshTokenViewModel model)
+        {
+            var user = await _userManager.FindByNameAsync(model.Username);
+            if (user == null || user.RefreshToken != model.RefreshToken || user.RefreshTokenExpiryTime <= DateTime.UtcNow)
+                return Unauthorized("Invalid or expired refresh token");
+
+            var newAccessToken = GenerateAccessToken(user);
+            var newRefreshToken = GenerateRefreshToken();
+
+            user.RefreshToken = newRefreshToken;
+            user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(7);
+            await _userManager.UpdateAsync(user);
+
+            return Ok(new
+            {
+                accessToken = newAccessToken,
+                refreshToken = newRefreshToken
+            });
+        }
+
+        private string GenerateAccessToken(UserAccount user)
+        {
+            var claims = new[]
+            {
+                new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
+                new Claim(ClaimTypes.Name, user.UserName)
             };
 
-            var result = await _userManager.CreateAsync(user, model.PasswordHash); // PasswordHash is used as the plain password here
+            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_config["JwtKey"]));
+            var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
-            if (result.Succeeded)
-            {
-                await _signInManager.SignInAsync(user, isPersistent: false);
-                return RedirectToAction("Index", "Home");
-            }
+            var token = new JwtSecurityToken(
+                expires: DateTime.UtcNow.AddMinutes(30),
+                claims: claims,
+                signingCredentials: creds
+            );
 
-            foreach (var error in result.Errors)
-            {
-                ModelState.AddModelError(string.Empty, error.Description);
-            }
-
-            return View(model);
+            return new JwtSecurityTokenHandler().WriteToken(token);
         }
 
-        // GET: /Account/Login
-        [HttpGet]
-        public IActionResult Login()
+        private string GenerateRefreshToken()
         {
-            return View(new LoginViewModel());
-        }
-
-        // POST: /Account/Login
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Login(LoginViewModel model)
-        {
-            if (!ModelState.IsValid)
-                return View(model);
-
-            var result = await _signInManager.PasswordSignInAsync(model.Username, model.Password, model.RememberMe, lockoutOnFailure: false);
-
-            if (result.Succeeded)
-            {
-                return RedirectToAction("Index", "Home");
-            }
-
-            if (result.IsLockedOut)
-            {
-                ModelState.AddModelError(string.Empty, "Your account is locked out.");
-            }
-            else
-            {
-                ModelState.AddModelError(string.Empty, "Invalid login attempt.");
-            }
-
-            return View(model);
-        }
-
-        // POST: /Account/Logout
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Logout()
-        {
-            await _signInManager.SignOutAsync();
-            return RedirectToAction("Index", "Home");
+            return Convert.ToBase64String(RandomNumberGenerator.GetBytes(64));
         }
     }
 }

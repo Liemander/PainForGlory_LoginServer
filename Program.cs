@@ -1,50 +1,38 @@
 ﻿using Microsoft.EntityFrameworkCore;
-using PainForGlory_LoginServer.Data;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Authentication.Cookies;
-using System.Security.Claims;
-using PainForGlory_LoginServer.Models;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.IdentityModel.Tokens;
-using Microsoft.Extensions.DependencyInjection;
+using PainForGlory_LoginServer.Data;
+using PainForGlory_LoginServer.Models;
 using System.Text;
 
-
-
-
+DotNetEnv.Env.Load(); // Load .env into Environment variables
 
 var builder = WebApplication.CreateBuilder(args);
-// Get connection string from environment variable
+
+// ✅ Get connection string
 var connectionString = Environment.GetEnvironmentVariable("PFG_LOGIN_DB_CONNECTION");
-DotNetEnv.Env.Load(); // Loads .env file into Environment variables
+if (string.IsNullOrEmpty(connectionString))
+    throw new InvalidOperationException("Database connection string is missing.");
+
+// ✅ Configure EF + Identity
 builder.Services.AddDbContext<AuthDbContext>(options =>
     options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString)));
 
-//Old Web server based code
-// Add services to the container.
-//builder.Services.AddControllersWithViews().AddRazorRuntimeCompilation();
-//
-//builder.Services.AddSession();
-//builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
-//    .AddCookie(options =>
-//    {
-//        options.LoginPath = "/Account/Login";
-//        options.LogoutPath = "/Account/Logout";
-//        options.AccessDeniedPath = "/Account/AccessDenied"; // Optional
-//    });
-
-
-// 1️⃣ MVC removed – we only need controllers for now:
-builder.Services.AddControllers();          // keeps AccountController working
-
-// 2️⃣ AddIdentityCore keeps your UserAccount table but removes the cookie stack
-builder.Services.AddIdentityCore<UserAccount>()
-    .AddEntityFrameworkStores<AuthDbContext>();
+builder.Services.AddIdentityCore<UserAccount>(options =>
+{
+    options.User.RequireUniqueEmail = true;
+})
+.AddEntityFrameworkStores<AuthDbContext>()
+.AddDefaultTokenProviders();
 
 builder.Services.AddScoped<TokenService>();
 
-// 3️⃣ JWT bearer auth (good for both Unity clients + other servers)
+// ✅ Configure JWT authentication
+var jwtKey = builder.Configuration["JwtKey"] ?? Environment.GetEnvironmentVariable("JwtKey");
+if (string.IsNullOrEmpty(jwtKey))
+    throw new InvalidOperationException("JwtKey configuration is missing or empty.");
+
 builder.Services.AddAuthentication(options =>
 {
     options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
@@ -57,36 +45,26 @@ builder.Services.AddAuthentication(options =>
         ValidateIssuer = false,
         ValidateAudience = false,
         ValidateLifetime = true,
-        IssuerSigningKey =
-            new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["JwtKey"]))
+        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey))
     };
 });
 
 builder.Services.AddAuthorization();
 
+// ✅ Use only controllers (API)
+builder.Services.AddControllers();
+
 var app = builder.Build();
 
-app.UseSession();
-
-
-// Configure the HTTP request pipeline.
-if (!app.Environment.IsDevelopment())
-{
-    app.UseExceptionHandler("/Home/Error");
-}
-app.UseStaticFiles();
-
+// ✅ Clean middleware
 app.UseRouting();
-
 app.UseAuthentication();
-
 app.UseAuthorization();
 
-app.MapControllerRoute(
-    name: "default",
-    pattern: "{controller=Home}/{action=Index}/{id?}");
+// ✅ Map API routes
+app.MapControllers();
 
-
-
+// Optional: add health check endpoint
+app.MapGet("/", () => Results.Json(new { status = "Login server is running" }));
 
 app.Run();

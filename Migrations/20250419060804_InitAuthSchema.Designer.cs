@@ -12,8 +12,8 @@ using PainForGlory_LoginServer.Data;
 namespace PainForGlory_LoginServer.Migrations
 {
     [DbContext(typeof(AuthDbContext))]
-    [Migration("20250418153144_IdentityGuidInit")]
-    partial class IdentityGuidInit
+    [Migration("20250419060804_InitAuthSchema")]
+    partial class InitAuthSchema
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -201,6 +201,12 @@ namespace PainForGlory_LoginServer.Migrations
                     b.Property<bool>("PhoneNumberConfirmed")
                         .HasColumnType("tinyint(1)");
 
+                    b.Property<string>("RefreshToken")
+                        .HasColumnType("longtext");
+
+                    b.Property<DateTime?>("RefreshTokenExpiryTime")
+                        .HasColumnType("datetime(6)");
+
                     b.Property<string>("SecurityStamp")
                         .HasColumnType("longtext");
 
@@ -210,10 +216,6 @@ namespace PainForGlory_LoginServer.Migrations
                     b.Property<string>("UserName")
                         .HasMaxLength(256)
                         .HasColumnType("varchar(256)");
-
-                    b.Property<string>("Username")
-                        .IsRequired()
-                        .HasColumnType("longtext");
 
                     b.HasKey("Id");
 
