@@ -25,4 +25,8 @@
     <PackageReference Include="Pomelo.EntityFrameworkCore.MySql" Version="8.0.3" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\PainforGlory_Common\PainForGlory_Common.csproj" />
+  </ItemGroup>
+
 </Project>
