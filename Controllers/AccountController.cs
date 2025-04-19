@@ -92,5 +92,26 @@ namespace PainForGlory_LoginServer.Controllers
         {
             return Convert.ToBase64String(RandomNumberGenerator.GetBytes(64));
         }
+
+        [HttpPost("register")]
+        public async Task<IActionResult> Register([FromBody] RegisterViewModel model)
+        {
+            if (!ModelState.IsValid)
+                return BadRequest("Invalid registration data.");
+
+            var user = new UserAccount
+            {
+                UserName = model.Username,
+                Email = model.Email,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            var result = await _userManager.CreateAsync(user, model.Password);
+
+            if (!result.Succeeded)
+                return BadRequest(result.Errors);
+
+            return Ok("Registration successful.");
+        }
     }
 }
