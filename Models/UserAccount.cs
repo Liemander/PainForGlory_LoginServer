@@ -10,5 +10,8 @@ namespace PainForGlory_LoginServer.Models
         public string? RefreshToken { get; set; }
         public DateTime? RefreshTokenExpiryTime { get; set; }
 
+        public ICollection<PreviousAccountInfo> PreviousAccountInfos { get; set; } = new List<PreviousAccountInfo>();
+
+
     }
 }

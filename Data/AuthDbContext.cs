@@ -19,5 +19,7 @@ namespace PainForGlory_LoginServer.Data
             base.OnModelCreating(builder);
             // (rename tables here if you like)
         }
+        public DbSet<PreviousAccountInfo> PreviousAccountInfos { get; set; }
+
     }
 }
