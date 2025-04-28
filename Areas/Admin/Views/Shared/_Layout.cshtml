@@ -1,0 +1,18 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <title>@ViewData["Title"] - Admin</title>
+    <link rel="stylesheet" href="~/css/site.css" />
+</head>
+<body>
+    <nav>
+        <a href="/">Back to Public Site</a> |
+        <a href="/admin">Dashboard</a> |
+        <a href="/account/logout">Logout</a>
+    </nav>
+    <div class="container">
+        @RenderBody()
+    </div>
+</body>
+</html>

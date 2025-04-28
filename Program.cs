@@ -10,61 +10,78 @@ DotNetEnv.Env.Load(); // Load .env into Environment variables
 
 var builder = WebApplication.CreateBuilder(args);
 
-// ✅ Get connection string
-var connectionString = Environment.GetEnvironmentVariable("PFG_LOGIN_DB_CONNECTION");
-if (string.IsNullOrEmpty(connectionString))
-    throw new InvalidOperationException("Database connection string is missing.");
+// ── DATABASE & DB CONTEXT ────────────────────────────────────────────────────────
+var connectionString = Environment.GetEnvironmentVariable("PFG_LOGIN_DB_CONNECTION")
+    ?? throw new InvalidOperationException("Database connection string is missing.");
 
-// ✅ Configure EF + Identity
 builder.Services.AddDbContext<AuthDbContext>(options =>
     options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString)));
 
-builder.Services.AddIdentityCore<UserAccount>(options =>
-{
-    options.User.RequireUniqueEmail = true;
-})
-.AddEntityFrameworkStores<AuthDbContext>()
-.AddDefaultTokenProviders();
+// ── IDENTITY (UserAccount + UserRole) ─────────────────────────────────────────────
+builder.Services
+    .AddIdentity<UserAccount, UserRole>(options =>
+    {
+        options.SignIn.RequireConfirmedAccount = false;
+        options.User.RequireUniqueEmail = true;
+    })
+    .AddEntityFrameworkStores<AuthDbContext>()
+    .AddDefaultTokenProviders()
+    .AddDefaultUI();
 
+// ── AUTHENTICATION (ONLY ADD JWT AFTER IDENTITY) ──────────────────────────────────
+var jwtKey = builder.Configuration["JwtKey"]
+             ?? Environment.GetEnvironmentVariable("JwtKey")
+             ?? throw new InvalidOperationException("JwtKey configuration is missing.");
+
+builder.Services.AddAuthentication()
+    .AddJwtBearer(JwtBearerDefaults.AuthenticationScheme, jwtOpts =>
+    {
+        jwtOpts.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = false,
+            ValidateAudience = false,
+            ValidateLifetime = true,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey))
+        };
+    });
+
+// ── YOUR OTHER SERVICES ──────────────────────────────────────────────────────────
 builder.Services.AddScoped<TokenService>();
 
-// ✅ Configure JWT authentication
-var jwtKey = builder.Configuration["JwtKey"] ?? Environment.GetEnvironmentVariable("JwtKey");
-if (string.IsNullOrEmpty(jwtKey))
-    throw new InvalidOperationException("JwtKey configuration is missing or empty.");
-
-builder.Services.AddAuthentication(options =>
+builder.Services.AddAuthorization(options =>
 {
-    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
-    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
-})
-.AddJwtBearer(opt =>
-{
-    opt.TokenValidationParameters = new TokenValidationParameters
-    {
-        ValidateIssuer = false,
-        ValidateAudience = false,
-        ValidateLifetime = true,
-        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey))
-    };
+    options.AddPolicy("AdminOnly", policy =>
+        policy.RequireRole("Admin")
+              .RequireAuthenticatedUser());
 });
 
-builder.Services.AddAuthorization();
-
-// ✅ Use only controllers (API)
-builder.Services.AddControllers();
+builder.Services.AddControllersWithViews();
+builder.Services.AddRazorPages();
 
 var app = builder.Build();
 
-// ✅ Clean middleware
+// ── MIDDLEWARE PIPELINE ───────────────────────────────────────────────────────────
 app.UseRouting();
 app.UseAuthentication();
 app.UseAuthorization();
 
-// ✅ Map API routes
-app.MapControllers();
+// ── ROUTING ───────────────────────────────────────────────────────────────────────
+app.MapRazorPages();     // Identity pages like Login/Register
+app.MapControllers();    // API controllers
 
-// Optional: add health check endpoint
+// Public routes (default Home, etc.)
+app.MapControllerRoute(
+    name: "default",
+    pattern: "{controller=Home}/{action=Index}/{id?}");
+
+// Admin area routes
+app.MapAreaControllerRoute(
+    name: "AdminArea",
+    areaName: "Admin",
+    pattern: "admin/{controller=Home}/{action=Index}/{id?}")
+   .RequireAuthorization("AdminOnly");
+
+// Optional: Health check endpoint
 app.MapGet("/", () => Results.Json(new { status = "Login server is running" }));
 
 app.Run();
