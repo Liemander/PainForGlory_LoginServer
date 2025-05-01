@@ -1,10 +1,11 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.IdentityModel.Tokens;
 using PainForGlory_LoginServer.Data;
 using PainForGlory_LoginServer.Models;
 using System.Text;
+using PainForGlory_LoginServer.Helpers;
 
 DotNetEnv.Env.Load(); // Load .env into Environment variables
 
@@ -16,6 +17,8 @@ var connectionString = Environment.GetEnvironmentVariable("PFG_LOGIN_DB_CONNECTI
 
 builder.Services.AddDbContext<AuthDbContext>(options =>
     options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString)));
+
+
 
 // ── IDENTITY (UserAccount + UserRole) ─────────────────────────────────────────────
 builder.Services
@@ -44,6 +47,15 @@ builder.Services.AddAuthentication()
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey))
         };
     });
+builder.Services.ConfigureApplicationCookie(options =>
+{
+    options.Cookie.Name = "PFG.Identity"; // Optional, to make it easier to debug
+    options.ExpireTimeSpan = TimeSpan.FromDays(14);
+    options.SlidingExpiration = true;
+    options.LoginPath = "/Identity/Account/Login";
+    options.LogoutPath = "/Identity/Account/Logout";
+    options.AccessDeniedPath = "/Identity/Account/AccessDenied";
+});
 
 // ── YOUR OTHER SERVICES ──────────────────────────────────────────────────────────
 builder.Services.AddScoped<TokenService>();
@@ -51,7 +63,7 @@ builder.Services.AddScoped<TokenService>();
 builder.Services.AddAuthorization(options =>
 {
     options.AddPolicy("AdminOnly", policy =>
-        policy.RequireRole("Admin")
+        policy.RequireRole("Admin","SuperAdmin")
               .RequireAuthenticatedUser());
 });
 
@@ -61,6 +73,7 @@ builder.Services.AddRazorPages();
 var app = builder.Build();
 
 // ── MIDDLEWARE PIPELINE ───────────────────────────────────────────────────────────
+app.UseStaticFiles();
 app.UseRouting();
 app.UseAuthentication();
 app.UseAuthorization();
@@ -69,19 +82,30 @@ app.UseAuthorization();
 app.MapRazorPages();     // Identity pages like Login/Register
 app.MapControllers();    // API controllers
 
-// Public routes (default Home, etc.)
+// Public Area - special "root" mapping
 app.MapControllerRoute(
-    name: "default",
-    pattern: "{controller=Home}/{action=Index}/{id?}");
+    name: "PublicAreaRoot",
+    pattern: "{controller=Home}/{action=Index}/{id?}",
+    defaults: new { area = "Public" });
 
 // Admin area routes
 app.MapAreaControllerRoute(
     name: "AdminArea",
     areaName: "Admin",
     pattern: "admin/{controller=Home}/{action=Index}/{id?}")
-   .RequireAuthorization("AdminOnly");
+    .RequireAuthorization("AdminOnly");
 
-// Optional: Health check endpoint
-app.MapGet("/", () => Results.Json(new { status = "Login server is running" }));
+using (var scope = app.Services.CreateScope())
+{
+    var services = scope.ServiceProvider;
+    var env = services.GetRequiredService<IWebHostEnvironment>();
+    await SeedData.InitializeAsync(services);
+    if (env.IsDevelopment())
+    {
+        await SeedData.SeedFakeUsersAsync(services);
+    }
+}
 
 app.Run();
+
+

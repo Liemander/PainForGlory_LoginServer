@@ -1,0 +1,23 @@
+﻿@{
+    ViewData["Title"] = "Home Page";
+}
+
+<div class="text-center">
+    <h1 class="display-4">Welcome to Pain For Glory Admin Portal</h1>
+    <p>Use the links above to Register, Login, or go to Admin Panel.</p>
+    @if (User.Identity.IsAuthenticated)
+    {
+        <form asp-area="Public" asp-controller="EmergencyRepair" asp-action="CheckAndRepairSuperAdmin" method="post">
+            <button class="btn btn-warning">Check/Repair SuperAdmin</button>
+        </form>
+        @if (User.IsInRole("Admin") || User.IsInRole("SuperAdmin"))
+        {
+            <div class="mt-3">
+                <a class="btn btn-outline-dark" asp-area="Admin" asp-controller="UserManagement" asp-action="Index">
+                    Go to User Management
+                </a>
+            </div>
+        }
+
+    }
+</div>

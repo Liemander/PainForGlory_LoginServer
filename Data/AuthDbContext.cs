@@ -6,7 +6,7 @@ using PainForGlory_LoginServer.Models;
 namespace PainForGlory_LoginServer.Data
 {
     public class AuthDbContext
-        : IdentityDbContext<UserAccount, IdentityRole<Guid>, Guid>
+        : IdentityDbContext<UserAccount, UserRole, Guid>
     {
         public AuthDbContext(DbContextOptions<AuthDbContext> options) : base(options) { }
 
