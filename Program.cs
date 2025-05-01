@@ -55,6 +55,27 @@ builder.Services.ConfigureApplicationCookie(options =>
     options.LoginPath = "/Identity/Account/Login";
     options.LogoutPath = "/Identity/Account/Logout";
     options.AccessDeniedPath = "/Identity/Account/AccessDenied";
+    options.Events.OnRedirectToLogin = context =>
+    {
+        if (context.Request.Path.StartsWithSegments("/api"))
+        {
+            context.Response.StatusCode = 401; // Unauthorized
+            return Task.CompletedTask;
+        }
+        context.Response.Redirect(context.RedirectUri);
+        return Task.CompletedTask;
+    };
+
+    options.Events.OnRedirectToAccessDenied = context =>
+    {
+        if (context.Request.Path.StartsWithSegments("/api"))
+        {
+            context.Response.StatusCode = 403; // Forbidden
+            return Task.CompletedTask;
+        }
+        context.Response.Redirect(context.RedirectUri);
+        return Task.CompletedTask;
+    };
 });
 
 // ── YOUR OTHER SERVICES ──────────────────────────────────────────────────────────
@@ -94,6 +115,12 @@ app.MapAreaControllerRoute(
     areaName: "Admin",
     pattern: "admin/{controller=Home}/{action=Index}/{id?}")
     .RequireAuthorization("AdminOnly");
+
+// API area
+app.MapAreaControllerRoute(
+    name: "ApiArea",
+    areaName: "Api",
+    pattern: "api/{controller=Home}/{action=Index}/{id?}");
 
 using (var scope = app.Services.CreateScope())
 {

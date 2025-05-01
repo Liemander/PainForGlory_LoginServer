@@ -52,7 +52,21 @@ namespace PainForGlory_LoginServer.Areas.Admin.Controllers
                 query = query.Where(u => userIdsInRole.Contains(u.Id));
             }
 
+
             int totalUsers = await query.CountAsync();
+
+            if (totalUsers == 0)
+            {
+                ViewBag.Search = search;
+                ViewBag.RoleFilter = roleFilter;
+                ViewBag.Page = 1;
+                ViewBag.PageSize = pageSize;
+                ViewBag.TotalPages = 0;
+                ViewBag.TotalUsers = 0;
+
+                return View(new List<UserAccount>());
+            }
+
             int totalPages = (int)Math.Ceiling(totalUsers / (double)pageSize);
             page = Math.Clamp(page, 1, totalPages);
 
