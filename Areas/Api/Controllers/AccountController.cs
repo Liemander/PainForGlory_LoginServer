@@ -38,6 +38,7 @@ namespace PainForGlory_LoginServer.Areas.API.Controllers
 
         // Endpoint for user login
         [HttpPost("login")]
+        [AllowAnonymous]
         public async Task<IActionResult> Login([FromBody] LoginViewModel model)
         {
             // Find user by username
@@ -123,6 +124,7 @@ namespace PainForGlory_LoginServer.Areas.API.Controllers
 
         // Endpoint for user registration
         [HttpPost("register")]
+        [AllowAnonymous]
         public async Task<IActionResult> Register([FromBody] RegisterViewModel model)
         {
             // Validate the model
